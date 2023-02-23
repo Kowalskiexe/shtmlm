@@ -34,7 +34,7 @@ export function getCustomTags(html) {
     const tags = html.match(tagRegex);
     const customTags = new Set();
     if (!tags)
-        return new customTags;
+        return customTags;
     tags.forEach(tag => {
         if (isCustomTag(tag))
             customTags.add(getTagName(tag));
