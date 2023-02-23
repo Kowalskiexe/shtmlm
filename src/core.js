@@ -1,4 +1,4 @@
-import { open, opendir, mkdir } from 'node:fs/promises';
+import { open, opendir, mkdir, copyFile } from 'node:fs/promises';
 import { htmlTags } from './tags.js';
 import path from 'node:path';
 
@@ -11,7 +11,27 @@ export async function parseDir(dirPath, inDir, digraph, tagFileMap) {
             if (dirent.isDirectory()) {
                 await parseDir(direntPath, inDir, digraph, tagFileMap);
             } else {
-                await parseFile(direntPath, inDir, digraph, tagFileMap);
+                const ext = path.extname(direntPath)
+                if (ext === '.html')
+                    await parseFile(direntPath, inDir, digraph, tagFileMap);
+            }
+        }
+    } catch (err) {
+        console.error(err);
+    }
+}
+
+export async function copyDirectory(src, dst) {
+    try {
+        const dir = await opendir(src);
+        for await (const dirent of dir) {
+            const direntPath = path.join(src, dirent.name);
+            const direntPathDst = path.join(dst, dirent.name);
+            if (dirent.isDirectory()) {
+                mkdir(direntPathDst, { recursive: true });
+                await copyDirectory(direntPath, direntPathDst);
+            } else {
+                await copyFile(direntPath, direntPathDst);
             }
         }
     } catch (err) {
@@ -30,7 +50,7 @@ export function getTagName(tag) {
 }
 
 export function getCustomTags(html) {
-    const tagRegex = /<.*>/g;
+    const tagRegex = /<[a-zA-Z0-9]*>/g;
     const tags = html.match(tagRegex);
     const customTags = new Set();
     if (!tags)
@@ -47,6 +67,9 @@ export function isCustomTag(tag) {
 }
 
 export async function parseFile(filePath, inDir, digraph, tagFileMap) {
+    const ext = path.extname(filePath);
+    if (ext !== '.html')
+        throw new Error(`Error: parsed file (${filePath}) must in .html format!`);
     const file = await open(filePath);
     const content = await file.readFile({encoding: 'UTF-8'});
     const customTags = getCustomTags(content);
@@ -89,6 +112,9 @@ export default async function build(inDir, outDir) {
     await parseDir(inDir, inDir, digraph, tagFileMap);
     
     const sorted = sortTopologically(digraph);
+
+    // copy all files and overwrite *.html
+    copyDirectory(inDir, outDir);
     
     sorted.reverse();
     for (const tag of sorted) {
